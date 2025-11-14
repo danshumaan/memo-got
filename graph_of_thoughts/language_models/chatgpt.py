@@ -118,7 +118,7 @@ class ChatGPT(AbstractLanguageModel):
             model=self.model_id,
             messages=messages,
             temperature=self.temperature,
-            max_tokens=self.max_tokens,
+            max_completion_tokens=self.max_tokens,
             n=num_responses,
             stop=self.stop,
         )

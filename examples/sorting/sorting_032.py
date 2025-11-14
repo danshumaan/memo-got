@@ -643,6 +643,15 @@ def run(
     results_folder = os.path.join(results_dir, folder_name)
     os.makedirs(results_folder)
 
+    model_mapping = {
+        "chatgpt": language_models.ChatGPT,
+        "gpt-5-mini": language_models.ChatGPT,
+        "gpt-4.1-mini": language_models.ChatGPT,
+        "llama-3.1-8b-instruct": language_models.Llama3HF,
+        "llama7b-hf": language_models.Llama2HF,
+        "gemma-3-12b-it": language_models.Gemma3HF,
+    }
+
     config = {
         "data": selected_data,
         "methods": [method.__name__ for method in methods],
@@ -677,10 +686,10 @@ def run(
                     f"Budget has been depleted, stopping. Method {method.__name__} has not been run."
                 )
                 break
-            lm = language_models.ChatGPT(
+            lm = model_mapping[lm_name](
                 os.path.join(
                     os.path.dirname(__file__),
-                    "../../graph_of_thoughts/language_models/config.json",
+                    "../../graph_of_thoughts/language_models/config_template.json",
                 ),
                 model_name=lm_name,
                 cache=True,
@@ -724,9 +733,11 @@ if __name__ == "__main__":
         [0, 0, 0, 0, 1, 1, 1, 1, 2...]
     """
     budget = 30
-    samples = [item for item in range(0, 100)]
-    approaches = [io, cot, tot, tot2, got]
+    # samples = [item for item in range(0, 100)]
+    samples = [0]
+    # approaches = [io, cot, tot, tot2, got]
+    approaches = [got]
 
-    spent = run(samples, approaches, budget, "chatgpt")
+    spent = run(samples, approaches, budget, "gpt-4.1-mini")
 
     logging.info(f"Spent {spent} out of {budget} budget.")
