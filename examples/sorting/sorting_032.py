@@ -647,9 +647,9 @@ def run(
         "chatgpt": language_models.ChatGPT,
         "gpt-5-mini": language_models.ChatGPT,
         "gpt-4.1-mini": language_models.ChatGPT,
-        "llama-3.1-8b-instruct": language_models.Llama3HF,
-        "llama7b-hf": language_models.Llama2HF,
-        "gemma-3-12b-it": language_models.Gemma3HF,
+        #  "llama-3.1-8b-instruct": language_models.Llama3HF,
+        #  "llama7b-hf": language_models.Llama2HF,
+        #  "gemma-3-12b-it": language_models.Gemma3HF,
     }
 
     config = {
