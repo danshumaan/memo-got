@@ -17,6 +17,7 @@ from graph_of_thoughts.operations.thought import Thought
 from graph_of_thoughts.language_models import AbstractLanguageModel
 from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
+from graph_of_thoughts.memoization import *
 
 
 class OperationType(Enum):
@@ -167,14 +168,16 @@ class Score(Operation):
         ] = None,
     ) -> None:
         """
+        No memoization necessary, because no LLM calls.
+
         Initializes a new Score operation.
 
-        :param num_samples: Number of samples to use for scoring. Defaults to 1.
-        :type num_samples: int
-        :param combined_scoring: Whether to score all thoughts together or individually. Defaults to False.
-        :type combined_scoring: bool
-        :param scoring_function: A function to score thoughts (if not using LM). Defaults to None.
-        :type scoring_function: Takes a list of thought states or a single thought state and
+        :param      num_samples: Number of samples to use for scoring. Defaults to 1.
+        :type       num_samples: int
+        :param      combined_scoring: Whether to score all thoughts together or individually. Defaults to False.
+        :type       combined_scoring: bool
+        :param      scoring_function: A function to score thoughts (if not using LM). Defaults to None.
+        :type       scoring_function: Takes a list of thought states or a single thought state and
                                 returns a list of scores or a single score.
         """
         super().__init__()
@@ -309,20 +312,21 @@ class ValidateAndImprove(Operation):
         return [thought_list[-1] for thought_list in self.thoughts]
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the ValidateAndImprove operation by validating and improving the predecessors' thoughts.
         If a validation function is provided, it is used, otherwise the LM is prompted.
         If improvement is enabled, the LM is prompted to improve the thought, if it is not valid.
 
-        :param lm: The language model to be used.
-        :type lm: AbstractLanguageModel
-        :param prompter: The prompter for crafting prompts.
-        :type prompter: Prompter
-        :param parser: The parser for parsing responses.
-        :type parser: Parser
-        :param kwargs: Additional parameters for execution.
+        :param          lm: The language model to be used.
+        :type           lm: AbstractLanguageModel
+        :param          prompter: The prompter for crafting prompts.
+        :type           prompter: Prompter
+        :param          parser: The parser for parsing responses.
+        :type           parser: Parser
+        :param          kwargs: Additional parameters for execution.
         :raises AssertionError: If operation has no predecessors.
         """
         previous_thoughts: List[Thought] = self.get_previous_thoughts()
@@ -344,11 +348,20 @@ class ValidateAndImprove(Operation):
                     valid = self.validate_function(current_thought.state)
                 else:
                     prompt = prompter.validation_prompt(**current_thought.state)
+                    key = (self.operation_type, prompter.generate_prompt, ThoughtLite(current_thought))
+                    self.logger.debug("Created key: %s", key)
                     self.logger.debug("Prompt for LM: %s", prompt)
-                    responses = lm.get_response_texts(
-                        lm.query(prompt, num_responses=self.num_samples)
-                    )
-                    self.logger.debug("Responses from LM: %s", responses)
+
+                    if key in memo:
+                        responses = memo[key]
+                        self.logger.debug("Using cache response: %s", responses)
+                    else:
+                        responses = lm.get_response_texts(
+                            lm.query(prompt, num_responses=self.num_branches_response)
+                        )
+                        memo[key] = responses
+                        self.logger.debug("Caching %s", responses)
+                        self.logger.debug("Responses from LM: %s", responses)
 
                     valid = parser.parse_validation_answer(
                         current_thought.state, responses
@@ -421,7 +434,8 @@ class Generate(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the Generate operation by generating thoughts from the predecessors.
@@ -448,11 +462,21 @@ class Generate(Operation):
         for thought in previous_thoughts:
             base_state = thought.state
             prompt = prompter.generate_prompt(self.num_branches_prompt, **base_state)
+            key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought))
+            self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", prompt)
-            responses = lm.get_response_texts(
-                lm.query(prompt, num_responses=self.num_branches_response)
-            )
-            self.logger.debug("Responses from LM: %s", responses)
+
+            if key in memo:
+                responses = memo[key]
+                self.logger.debug("Using cache response: %s", responses)
+            else:
+                responses = lm.get_response_texts(
+                    lm.query(prompt, num_responses=self.num_branches_response)
+                )
+                memo[key] = responses
+                self.logger.debug("Caching %s", responses)
+                self.logger.debug("Responses from LM: %s", responses)
+            
             for new_state in parser.parse_generate_answer(base_state, responses):
                 new_state = {**base_state, **new_state}
                 self.thoughts.append(Thought(new_state))
@@ -501,7 +525,8 @@ class Improve(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the Improve operation by improving the predecessors' thoughts.
@@ -522,9 +547,22 @@ class Improve(Operation):
 
         for thought in previous_thoughts:
             improve_prompt = prompter.improve_prompt(**thought.state)
+            
+            key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought))
+            self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", improve_prompt)
-            responses = lm.get_response_texts(lm.query(improve_prompt, num_responses=1))
-            self.logger.debug("Responses from LM: %s", responses)
+
+            if key in memo:
+                responses = memo[key]
+                self.logger.debug("Using cache response: %s", responses)
+            else:
+                responses = lm.get_response_texts(
+                    lm.query(improve_prompt, num_responses=1)
+                )
+                memo[key] = responses
+                self.logger.debug("Caching %s", responses)
+                self.logger.debug("Responses from LM: %s", responses)
+
             state_update = parser.parse_improve_answer(thought.state, responses)
             self.thoughts.append(Thought({**thought.state, **state_update}))
 
