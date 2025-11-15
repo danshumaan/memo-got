@@ -348,7 +348,7 @@ class ValidateAndImprove(Operation):
                     valid = self.validate_function(current_thought.state)
                 else:
                     prompt = prompter.validation_prompt(**current_thought.state)
-                    key = (self.operation_type, prompter.generate_prompt, ThoughtLite(current_thought))
+                    key = (self.operation_type, prompter.validation_prompt, ThoughtLite(current_thought))
                     self.logger.debug("Created key: %s", key)
                     self.logger.debug("Prompt for LM: %s", prompt)
 
@@ -462,6 +462,7 @@ class Generate(Operation):
         for thought in previous_thoughts:
             base_state = thought.state
             prompt = prompter.generate_prompt(self.num_branches_prompt, **base_state)
+            
             key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought))
             self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", prompt)
@@ -548,7 +549,7 @@ class Improve(Operation):
         for thought in previous_thoughts:
             improve_prompt = prompter.improve_prompt(**thought.state)
             
-            key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought))
+            key = (self.operation_type, prompter.improve_prompt, ThoughtLite(thought))
             self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", improve_prompt)
 
