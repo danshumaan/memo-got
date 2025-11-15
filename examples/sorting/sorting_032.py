@@ -188,17 +188,23 @@ Merged list:
         """
         Generate a generate prompt for the language model.
 
-        :param num_branches: The number of responses the prompt should ask the LM to generate.
-        :type num_branches: int
-        :param original: Input list of numbers.
-        :type original: str
-        :param current: Intermediate solution.
-        :type current: str
-        :param method: Method for which the generate prompt is generated.
-        :type method: str
-        :param kwargs: Additional keyword arguments.
+        :param              num_branches: The number of responses the prompt should ask the LM to generate.
+        :type               num_branches: int
+        
+        :param              original: Input list of numbers.
+        :type               original: str
+        
+        :param              current: Intermediate solution.
+        :type               current: str
+        
+        :param              method: Method for which the generate prompt is generated.
+        :type               method: str
+        
+        :param              kwargs: Additional keyword arguments.
+        
         :return: The generate prompt.
         :rtype: str
+        
         :raise AssertionError: If the requested number of branches is not one.
         """
 
