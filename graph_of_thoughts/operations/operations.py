@@ -17,6 +17,7 @@ from graph_of_thoughts.operations.thought import Thought
 from graph_of_thoughts.language_models import AbstractLanguageModel
 from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
+from graph_of_thoughts.call_count import increment_counter
 
 
 class OperationType(Enum):
@@ -231,6 +232,7 @@ class Score(Operation):
                 responses = lm.get_response_texts(
                     lm.query(prompt, num_responses=self.num_samples)
                 )
+                increment_counter()
                 self.logger.debug("Responses from LM: %s", responses)
                 scores = parser.parse_score_answer(previous_thoughts_states, responses)
             for thought, score in zip(previous_thoughts, scores):
@@ -253,6 +255,7 @@ class Score(Operation):
                     responses = lm.get_response_texts(
                         lm.query(prompt, num_responses=self.num_samples)
                     )
+                    increment_counter()
                     self.logger.debug("Responses from LM: %s", responses)
                     score = parser.parse_score_answer([thought.state], responses)[0]
 
@@ -348,6 +351,7 @@ class ValidateAndImprove(Operation):
                     responses = lm.get_response_texts(
                         lm.query(prompt, num_responses=self.num_samples)
                     )
+                    increment_counter()
                     self.logger.debug("Responses from LM: %s", responses)
 
                     valid = parser.parse_validation_answer(
@@ -366,6 +370,7 @@ class ValidateAndImprove(Operation):
                 responses = lm.get_response_texts(
                     lm.query(improve_prompt, num_responses=1)
                 )
+                increment_counter()
                 self.logger.debug("Responses from LM: %s", responses)
                 state_update = parser.parse_improve_answer(
                     current_thought.state, responses
@@ -452,6 +457,7 @@ class Generate(Operation):
             responses = lm.get_response_texts(
                 lm.query(prompt, num_responses=self.num_branches_response)
             )
+            increment_counter()
             self.logger.debug("Responses from LM: %s", responses)
             for new_state in parser.parse_generate_answer(base_state, responses):
                 new_state = {**base_state, **new_state}
@@ -524,6 +530,7 @@ class Improve(Operation):
             improve_prompt = prompter.improve_prompt(**thought.state)
             self.logger.debug("Prompt for LM: %s", improve_prompt)
             responses = lm.get_response_texts(lm.query(improve_prompt, num_responses=1))
+            increment_counter()
             self.logger.debug("Responses from LM: %s", responses)
             state_update = parser.parse_improve_answer(thought.state, responses)
             self.thoughts.append(Thought({**thought.state, **state_update}))
@@ -598,7 +605,7 @@ class Aggregate(Operation):
         responses = lm.get_response_texts(
             lm.query(prompt, num_responses=self.num_responses)
         )
-
+        increment_counter()
         self.logger.debug("Responses from LM: %s", responses)
 
         parsed = parser.parse_aggregation_answer(previous_thought_states, responses)

@@ -13,6 +13,7 @@ from graph_of_thoughts.language_models import AbstractLanguageModel
 from graph_of_thoughts.operations import GraphOfOperations, Thought
 from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
+from graph_of_thoughts.call_count import get_counter_value, reset_counter
 
 
 class Controller:
@@ -145,8 +146,9 @@ class Controller:
                 "prompt_tokens": self.lm.prompt_tokens,
                 "completion_tokens": self.lm.completion_tokens,
                 "cost": self.lm.cost,
+                "llm_calls": get_counter_value(),
             }
         )
-
+        reset_counter()
         with open(path, "w") as file:
             file.write(json.dumps(output, indent=2))
