@@ -20,6 +20,7 @@ from graph_of_thoughts.operations.thought import Thought
 from graph_of_thoughts.language_models import AbstractLanguageModel
 from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
+from graph_of_thoughts.call_count import increment_counter
 
 class OperationType(Enum):
     """
@@ -293,6 +294,7 @@ class Score(Operation):
                 responses = lm.get_response_texts(
                     lm.query(prompt, num_responses=self.num_samples)
                 )
+                increment_counter() 
                 self.logger.debug("Responses from LM: %s", responses, exc_info=True)
                 scores = parser.parse_score_answer(previous_thoughts_states, responses)
             for thought, score in zip(previous_thoughts, scores):
@@ -315,6 +317,7 @@ class Score(Operation):
                     responses = lm.get_response_texts(
                         lm.query(prompt, num_responses=self.num_samples)
                     )
+                    increment_counter()
                     self.logger.debug("Responses from LM: %s", responses, exc_info=True)
                     score = parser.parse_score_answer([thought.state], responses)[0]
 
@@ -415,10 +418,12 @@ class ValidateAndImprove(Operation):
                     if key in memo:
                         responses = memo[key]
                         self.logger.debug("Using cache response: %s", responses, exc_info=True)
+                        self.logger.debug("Using key: %s", key, exc_info=True)
                     else:
                         responses = lm.get_response_texts(
                             lm.query(prompt, num_responses=self.num_branches_response)
                         )
+                        increment_counter()
                         memo[key] = responses
                         self.logger.debug("Caching %s", responses, exc_info=True)
                         self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -439,6 +444,7 @@ class ValidateAndImprove(Operation):
                 responses = lm.get_response_texts(
                     lm.query(improve_prompt, num_responses=1)
                 )
+                increment_counter()
                 self.logger.debug("Responses from LM: %s", responses)
                 state_update = parser.parse_improve_answer(
                     current_thought.state, responses
@@ -542,10 +548,12 @@ class Generate(Operation):
                 if key in memo:
                     responses = memo[key]
                     self.logger.debug("Using cache response: %s", responses, exc_info=True)
+                    self.logger.debug("Using key: %s", key, exc_info=True)
                 else:
                     responses = lm.get_response_texts(
                         lm.query(prompt, num_responses=self.num_branches_response)
                     )
+                    increment_counter()
                     memo[key] = responses
                     self.logger.debug("Caching %s", responses, exc_info=True)
                     self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -639,6 +647,7 @@ class Improve(Operation):
                 responses = lm.get_response_texts(
                     lm.query(improve_prompt, num_responses=1)
                 )
+                increment_counter()
                 memo[key] = responses
                 self.logger.debug("Caching %s", responses)
                 self.logger.debug("Responses from LM: %s", responses)
@@ -717,7 +726,7 @@ class Aggregate(Operation):
         responses = lm.get_response_texts(
             lm.query(prompt, num_responses=self.num_responses)
         )
-
+        increment_counter()
         self.logger.debug("Responses from LM: %s", responses)
 
         parsed = parser.parse_aggregation_answer(previous_thought_states, responses)
