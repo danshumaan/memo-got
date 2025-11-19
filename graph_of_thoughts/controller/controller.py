@@ -71,11 +71,14 @@ class Controller:
             if operation.can_be_executed()
         ]
 
+        memo = dict()
+
         while len(execution_queue) > 0:
+            # breakpoint()
             current_operation = execution_queue.pop(0)
             self.logger.info("Executing operation %s", current_operation.operation_type)
             current_operation.execute(
-                self.lm, self.prompter, self.parser, **self.problem_parameters
+                self.lm, self.prompter, self.parser, memo, **self.problem_parameters
             )
             self.logger.info("Operation %s executed", current_operation.operation_type)
             for operation in current_operation.successors:

@@ -7,18 +7,19 @@
 # main author: Nils Blach
 
 from __future__ import annotations
+import ast
+from collections import Counter
 import logging
 from enum import Enum
 from typing import List, Iterator, Dict, Callable, Union
 from abc import ABC, abstractmethod
 import itertools
+import traceback
 
 from graph_of_thoughts.operations.thought import Thought
 from graph_of_thoughts.language_models import AbstractLanguageModel
 from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
-from graph_of_thoughts.memoization import *
-
 
 class OperationType(Enum):
     """
@@ -34,6 +35,62 @@ class OperationType(Enum):
     keep_valid: int = 6
     ground_truth_evaluator: int = 7
     selector: int = 8
+
+
+class ThoughtLite:
+    current_data : str = ""
+    original : str = ""
+    phase :int = -1
+
+    def __str__(self):
+        return f"current_data : {self.current_data} , original : {self.original} , phase: {self.phase}"
+
+    def __repr__(self):
+        return f"ThoughtLite [ current_data : {self.current_data} , original : {self.original} , phase: {self.phase} ]"
+
+
+    def __init__(self, thought: Thought):
+        # print(thought["current"], type(thought["current"]))
+        # print(thought["original"], type(thought["original"]))
+        self.current_data = thought["current"]
+        if self.current_data!=None and self.current_data!="":
+            self.current_data = tuple(ast.literal_eval(thought["current"]))
+
+        self.original = tuple(ast.literal_eval(thought["original"]))
+        self.phase = thought["phase"]
+
+    def __eq__(self, other: ThoughtLite):
+        print("self ",  self)
+        print("other", other)
+
+        rerturn_val = None
+
+        if self.current_data == None or self.current_data == "":
+            # return_val = self.phase == other.phase and self.original == other.original
+            return_val = self.original == other.original
+        else:
+            return_val = self.phase == other.phase and Counter(self.current_data) == Counter(other.current_data)
+    
+        print("equal :", return_val)
+        print()
+        return return_val
+
+    def __hash__(self):
+        return 100
+
+
+
+
+# Usage:
+
+# Given:
+# op_type
+# instruction_func
+# thought
+
+# Code:
+# thought_lite = ThoughtLite(thought)
+# key = tuple(op_type, instruction_func, thought_lite)
 
 
 class Operation(ABC):
@@ -100,7 +157,8 @@ class Operation(ABC):
         operation.predecessors.append(self)
 
     def execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Execute the operation, assuring that all predecessors have been executed.
@@ -118,13 +176,13 @@ class Operation(ABC):
         self.logger.info(
             "Executing operation %d of type %s", self.id, self.operation_type
         )
-        self._execute(lm, prompter, parser, **kwargs)
-        self.logger.debug("Operation %d executed", self.id)
+        self._execute(lm, prompter, parser, memo, **kwargs)
+        self.logger.debug("Operation %d executed", self.id, exc_info=True)
         self.executed = True
 
     @abstractmethod
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, memo: Dict, **kwargs
     ) -> None:
         """
         Abstract method for the actual execution of the operation.
@@ -198,7 +256,8 @@ class Score(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the scoring operation by scoring the thoughts from the predecessors.
@@ -224,17 +283,17 @@ class Score(Operation):
             previous_thoughts_states = [thought.state for thought in previous_thoughts]
             if self.scoring_function is not None:
                 self.logger.debug(
-                    "Using scoring function %s to score states", self.scoring_function
+                    "Using scoring function %s to score states", self.scoring_function, exc_info=True
                 )
                 scores = self.scoring_function(previous_thoughts_states)
             else:
                 prompt = prompter.score_prompt(previous_thoughts_states)
-                self.logger.debug("Prompt for LM: %s", prompt)
+                self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
                 responses = lm.get_response_texts(
                     lm.query(prompt, num_responses=self.num_samples)
                 )
-                self.logger.debug("Responses from LM: %s", responses)
+                self.logger.debug("Responses from LM: %s", responses, exc_info=True)
                 scores = parser.parse_score_answer(previous_thoughts_states, responses)
             for thought, score in zip(previous_thoughts, scores):
                 new_thought = Thought.from_thought(thought)
@@ -246,17 +305,17 @@ class Score(Operation):
                 if self.scoring_function is not None:
                     self.logger.debug(
                         "Using scoring function %s to score state",
-                        self.scoring_function,
+                        self.scoring_function, exc_info=True
                     )
                     score = self.scoring_function(thought.state)
                 else:
                     prompt = prompter.score_prompt([thought.state])
-                    self.logger.debug("Prompt for LM: %s", prompt)
+                    self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
                     responses = lm.get_response_texts(
                         lm.query(prompt, num_responses=self.num_samples)
                     )
-                    self.logger.debug("Responses from LM: %s", responses)
+                    self.logger.debug("Responses from LM: %s", responses, exc_info=True)
                     score = parser.parse_score_answer([thought.state], responses)[0]
 
                 new_thought.score = score
@@ -344,24 +403,25 @@ class ValidateAndImprove(Operation):
                     self.logger.debug(
                         "Using validate function %s to score states",
                         self.validate_function,
+                        exc_info=True
                     )
                     valid = self.validate_function(current_thought.state)
                 else:
                     prompt = prompter.validation_prompt(**current_thought.state)
-                    key = (self.operation_type, prompter.validation_prompt, ThoughtLite(current_thought))
-                    self.logger.debug("Created key: %s", key)
-                    self.logger.debug("Prompt for LM: %s", prompt)
+                    key = (self.operation_type, prompter.validation_prompt, ThoughtLite(current_thought.state))
+                    self.logger.debug("Created key: %s", key, exc_info=True)
+                    self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
                     if key in memo:
                         responses = memo[key]
-                        self.logger.debug("Using cache response: %s", responses)
+                        self.logger.debug("Using cache response: %s", responses, exc_info=True)
                     else:
                         responses = lm.get_response_texts(
                             lm.query(prompt, num_responses=self.num_branches_response)
                         )
                         memo[key] = responses
-                        self.logger.debug("Caching %s", responses)
-                        self.logger.debug("Responses from LM: %s", responses)
+                        self.logger.debug("Caching %s", responses, exc_info=True)
+                        self.logger.debug("Responses from LM: %s", responses, exc_info=True)
 
                     valid = parser.parse_validation_answer(
                         current_thought.state, responses
@@ -437,6 +497,17 @@ class Generate(Operation):
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
         memo: Dict, **kwargs
     ) -> None:
+
+       
+        if len(memo) != 0:
+            self.logger.debug("memo dictionary contents at entry of generate._execute ")
+            for key in memo:
+                self.logger.debug("element begin", exc_info=True)
+                self.logger.debug("  key: %s", key, exc_info=True)
+                self.logger.debug("  value: %s", memo[key], exc_info=True)
+                self.logger.debug("element end", exc_info=True)
+                self.logger.debug(" ", exc_info=True)
+
         """
         Executes the Generate operation by generating thoughts from the predecessors.
         The thoughts are generated by prompting the LM with the predecessors' thought states.
@@ -460,32 +531,40 @@ class Generate(Operation):
             previous_thoughts = [Thought(state=kwargs)]
 
         for thought in previous_thoughts:
-            base_state = thought.state
-            prompt = prompter.generate_prompt(self.num_branches_prompt, **base_state)
-            
-            key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought))
-            self.logger.debug("Created key: %s", key)
-            self.logger.debug("Prompt for LM: %s", prompt)
+            try:
+                base_state = thought.state
+                prompt = prompter.generate_prompt(self.num_branches_prompt, **base_state)
+                
+                key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought.state))
+                self.logger.debug("Created key: %s", key, exc_info=True)
+                self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
-            if key in memo:
-                responses = memo[key]
-                self.logger.debug("Using cache response: %s", responses)
-            else:
-                responses = lm.get_response_texts(
-                    lm.query(prompt, num_responses=self.num_branches_response)
-                )
-                memo[key] = responses
-                self.logger.debug("Caching %s", responses)
-                self.logger.debug("Responses from LM: %s", responses)
-            
-            for new_state in parser.parse_generate_answer(base_state, responses):
-                new_state = {**base_state, **new_state}
-                self.thoughts.append(Thought(new_state))
-                self.logger.debug(
-                    "New thought %d created with state %s",
-                    self.thoughts[-1].id,
-                    self.thoughts[-1].state,
-                )
+                if key in memo:
+                    responses = memo[key]
+                    self.logger.debug("Using cache response: %s", responses, exc_info=True)
+                else:
+                    responses = lm.get_response_texts(
+                        lm.query(prompt, num_responses=self.num_branches_response)
+                    )
+                    memo[key] = responses
+                    self.logger.debug("Caching %s", responses, exc_info=True)
+                    self.logger.debug("Responses from LM: %s", responses, exc_info=True)
+                
+                for new_state in parser.parse_generate_answer(base_state, responses):
+                    new_state = {**base_state, **new_state}
+                    self.thoughts.append(Thought(new_state))
+                    self.logger.debug(
+                        "New thought %d created with state %s",
+                        self.thoughts[-1].id,
+                        self.thoughts[-1].state,
+                        exc_info=True
+                    )
+            except Exception as e:
+                # Get full traceback info as a string
+                tb_str = ''.join(traceback.format_exception(None, e, e.__traceback__))
+                print("Full traceback:")
+                print(tb_str)
+
         if (
             len(self.thoughts)
             > self.num_branches_prompt
@@ -549,7 +628,7 @@ class Improve(Operation):
         for thought in previous_thoughts:
             improve_prompt = prompter.improve_prompt(**thought.state)
             
-            key = (self.operation_type, prompter.improve_prompt, ThoughtLite(thought))
+            key = (self.operation_type, prompter.improve_prompt, ThoughtLite(thought.state))
             self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", improve_prompt)
 
@@ -600,7 +679,8 @@ class Aggregate(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the Aggregate operation by aggregating the predecessors' thoughts.
@@ -716,7 +796,8 @@ class KeepBestN(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the KeepBestN operation by keeping the best N thoughts from the predecessors according to their score.
@@ -772,7 +853,8 @@ class KeepValid(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the KeepValid operation by keeping the valid thoughts from the predecessors.
@@ -840,7 +922,8 @@ class GroundTruth(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the GroundTruth operation by evaluating the predecessors' thoughts using the ground truth evaluator function.
@@ -905,7 +988,8 @@ class Selector(Operation):
         return self.thoughts
 
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, **kwargs
     ) -> None:
         """
         Executes the Selector operation by selecting thoughts from the predecessors using the selector function.
