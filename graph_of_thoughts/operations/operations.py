@@ -37,6 +37,12 @@ class OperationType(Enum):
     ground_truth_evaluator: int = 7
     selector: int = 8
 
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return str(self.value)
+
 
 class ThoughtLite:
     current_data : str = ""
