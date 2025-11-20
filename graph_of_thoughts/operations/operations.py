@@ -37,12 +37,6 @@ class OperationType(Enum):
     ground_truth_evaluator: int = 7
     selector: int = 8
 
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return str(self.value)
-
 
 class ThoughtLite:
     current_data : str = ""
@@ -56,15 +50,15 @@ class ThoughtLite:
         return f"ThoughtLite [ current_data : {self.current_data} , original : {self.original} , phase: {self.phase} ]"
 
 
-    def __init__(self, thought: Thought):
-        # print(thought["current"], type(thought["current"]))
-        # print(thought["original"], type(thought["original"]))
-        self.current_data = thought["current"]
+    def __init__(self, thought_state: Dict):
+        # print(thought_state["current"], type(thought_state["current"]))
+        # print(thought_state["original"], type(thought_state["original"]))
+        self.current_data = thought_state["current"]
         if self.current_data!=None and self.current_data!="":
-            self.current_data = tuple(ast.literal_eval(thought["current"]))
+            self.current_data = tuple(ast.literal_eval(thought_state["current"]))
 
-        self.original = tuple(ast.literal_eval(thought["original"]))
-        self.phase = thought["phase"]
+        self.original = tuple(ast.literal_eval(thought_state["original"]))
+        self.phase = thought_state["phase"]
 
     def __eq__(self, other: ThoughtLite):
         print("self ",  self)
@@ -433,9 +427,6 @@ class ValidateAndImprove(Operation):
                             lm.query(prompt, num_responses=self.num_branches_response)
                         )
                         increment_counter()
-                        self.logger.debug("CURRENT KEY: %s", key)
-                        self.logger.debug("ALL KEYS: %s", memo.keys())
-
                         memo[key] = responses
                         self.logger.debug("Caching %s", responses, exc_info=True)
                         self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -568,9 +559,6 @@ class Generate(Operation):
                         lm.query(prompt, num_responses=self.num_branches_response)
                     )
                     increment_counter()
-                    self.logger.debug("CURRENT KEY: %s", key)
-                    self.logger.debug("ALL KEYS: %s", memo.keys())
-
                     memo[key] = responses
                     self.logger.debug("Caching %s", responses, exc_info=True)
                     self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -665,12 +653,9 @@ class Improve(Operation):
                     lm.query(improve_prompt, num_responses=1)
                 )
                 increment_counter()
-                self.logger.debug("CURRENT KEY: %s", key)
-                self.logger.debug("ALL KEYS: %s", memo.keys())
-
                 memo[key] = responses
-                self.logger.debug("Caching %s", responses, exc_info=True)
-                self.logger.debug("Responses from LM: %s", responses, exc_info=True)
+                self.logger.debug("Caching %s", responses)
+                self.logger.debug("Responses from LM: %s", responses)
 
             state_update = parser.parse_improve_answer(thought.state, responses)
             self.thoughts.append(Thought({**thought.state, **state_update}))
@@ -724,6 +709,7 @@ class Aggregate(Operation):
         :param kwargs: Additional parameters for execution.
         :raises AssertionError: If operation has no predecessors.
         """
+
         assert (
             len(self.predecessors) >= 1
         ), "Aggregate operation must have at least one predecessor"
@@ -739,25 +725,76 @@ class Aggregate(Operation):
             base_state = {**base_state, **thought.state}
 
         previous_thought_states = [thought.state for thought in previous_thoughts]
-        print("previous thought states:")
-        print(previous_thought_states)
-        print()
         prompt = prompter.aggregation_prompt(previous_thought_states)
 
-        self.logger.debug("Prompt for LM: %s", prompt)
+        try:
 
-        responses = lm.get_response_texts(
-            lm.query(prompt, num_responses=self.num_responses)
-        )
-        increment_counter()
-        self.logger.debug("Responses from LM: %s", responses)
+            assert len(previous_thought_states) == 2
 
-        parsed = parser.parse_aggregation_answer(previous_thought_states, responses)
+            first_state = previous_thought_states[0]
+            second_state = previous_thought_states[1]
+            combined_state: Dict = dict()
 
-        if isinstance(parsed, dict):
-            parsed = [parsed]
-        for new_state in parsed:
-            self.thoughts.append(Thought({**base_state, **new_state}))
+            if first_state["phase"] == second_state["phase"] and first_state["original"] == second_state["original"]:
+                combined_state["phase"] = first_state["phase"]
+                combined_state["original"] = first_state["original"]
+                list1 = ast.literal_eval(first_state["current"])
+                list2 = ast.literal_eval(second_state["current"])
+                combined_list = list1 + list2
+                combined_state["current"] = str(combined_list)
+
+            if len(combined_state) != 0:
+                # Create a combined ThoughtLite instance corresponding to combined_state.
+                # If the combined ThoughtLite instance is memoized:
+                #    reuse the response.
+                # else
+                #    call LLM and cache its response    
+                self.logger.debug("States can be combined, trying optimized approach")
+                key = (self.operation_type, "aggregate", ThoughtLite(combined_state))
+                if key in memo:
+                    self.logger.debug("CURRENT KEY: %s", key)
+                    self.logger.debug("ALL KEYS: %s", memo.keys())
+                    responses = memo[key]
+                    self.logger.debug("Using cache response: %s", responses, exc_info=True)
+                    self.logger.debug("Using key: %s", key, exc_info=True)
+                else:
+                    responses = lm.get_response_texts(
+                        lm.query(prompt, num_responses=self.num_responses))                
+                    increment_counter()
+                    memo[key] = responses
+                    self.logger.debug("Caching %s", responses, exc_info=True)
+                    self.logger.debug("Responses from LM: %s", responses, exc_info=True)
+
+                parsed = parser.parse_aggregation_answer(previous_thought_states, responses)
+
+                if isinstance(parsed, dict):
+                    parsed = [parsed]
+                
+                for new_state in parsed:
+                    self.thoughts.append(Thought({**base_state, **new_state}))
+            
+            else:
+                self.logger.debug("States can't be combined, using normal prompting approach")
+                self.logger.debug("Prompt for LM: %s", prompt)
+
+                responses = lm.get_response_texts(
+                    lm.query(prompt, num_responses=self.num_responses)
+                )   
+                increment_counter()
+                self.logger.debug("Responses from LM: %s", responses)
+
+
+                parsed = parser.parse_aggregation_answer(previous_thought_states, responses)
+
+                if isinstance(parsed, dict):
+                    parsed = [parsed]
+                for new_state in parsed:
+                    self.thoughts.append(Thought({**base_state, **new_state}))
+        except Exception as e:
+                # Get full traceback info as a string
+                tb_str = ''.join(traceback.format_exception(None, e, e.__traceback__))
+                print("Full traceback:")
+                print(tb_str)    
 
 
 class KeepBestN(Operation):
