@@ -893,7 +893,7 @@ if __name__ == "__main__":
     """
     budget = 30
     # samples = [item for item in range(0, 100)]
-    samples = [0]
+    samples = [1]
     # approaches = [io, cot, tot, tot2, got]
     approaches = [got]
 
