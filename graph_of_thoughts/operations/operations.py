@@ -433,6 +433,9 @@ class ValidateAndImprove(Operation):
                             lm.query(prompt, num_responses=self.num_branches_response)
                         )
                         increment_counter()
+                        self.logger.debug("CURRENT KEY: %s", key)
+                        self.logger.debug("ALL KEYS: %s", memo.keys())
+
                         memo[key] = responses
                         self.logger.debug("Caching %s", responses, exc_info=True)
                         self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -565,6 +568,9 @@ class Generate(Operation):
                         lm.query(prompt, num_responses=self.num_branches_response)
                     )
                     increment_counter()
+                    self.logger.debug("CURRENT KEY: %s", key)
+                    self.logger.debug("ALL KEYS: %s", memo.keys())
+
                     memo[key] = responses
                     self.logger.debug("Caching %s", responses, exc_info=True)
                     self.logger.debug("Responses from LM: %s", responses, exc_info=True)
@@ -659,9 +665,12 @@ class Improve(Operation):
                     lm.query(improve_prompt, num_responses=1)
                 )
                 increment_counter()
+                self.logger.debug("CURRENT KEY: %s", key)
+                self.logger.debug("ALL KEYS: %s", memo.keys())
+
                 memo[key] = responses
-                self.logger.debug("Caching %s", responses)
-                self.logger.debug("Responses from LM: %s", responses)
+                self.logger.debug("Caching %s", responses, exc_info=True)
+                self.logger.debug("Responses from LM: %s", responses, exc_info=True)
 
             state_update = parser.parse_improve_answer(thought.state, responses)
             self.thoughts.append(Thought({**thought.state, **state_update}))
@@ -730,6 +739,9 @@ class Aggregate(Operation):
             base_state = {**base_state, **thought.state}
 
         previous_thought_states = [thought.state for thought in previous_thoughts]
+        print("previous thought states:")
+        print(previous_thought_states)
+        print()
         prompt = prompter.aggregation_prompt(previous_thought_states)
 
         self.logger.debug("Prompt for LM: %s", prompt)
