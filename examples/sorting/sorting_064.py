@@ -690,7 +690,7 @@ def run(
         data_ids = list(range(len(data)))
     selected_data = [data[i] for i in data_ids]
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    results_dir = os.path.join(os.path.dirname(__file__), "results/memoized/sorting_064")
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)

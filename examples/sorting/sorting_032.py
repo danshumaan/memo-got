@@ -639,7 +639,7 @@ def run(
         data_ids = list(range(len(data)))
     selected_data = [data[i] for i in data_ids]
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    results_dir = os.path.join(os.path.dirname(__file__), "results/memoized/sorting_032")
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -740,7 +740,7 @@ if __name__ == "__main__":
     """
     budget = 30
     # samples = [item for item in range(0, 100)]
-    samples = [0]
+    samples = [0,1]
     # approaches = [io, cot, tot, tot2, got]
     approaches = [got]
 
