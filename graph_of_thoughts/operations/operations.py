@@ -66,8 +66,9 @@ class ThoughtLite:
 
         rerturn_val = None
 
-        if self.current_data == None or self.current_data == "":
+        if (self.current_data == None or self.current_data == "") and (other.current_data == None or other.current_data == ""):
             # return_val = self.phase == other.phase and self.original == other.original
+            print("Using current_data comparison")
             return_val = self.original == other.original
         else:
             return_val = self.phase == other.phase and Counter(self.current_data) == Counter(other.current_data)
@@ -416,6 +417,8 @@ class ValidateAndImprove(Operation):
                     self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
                     if key in memo:
+                        self.logger.debug("Created key: %s", key)
+                        self.logger.debug("Created key: %s", memo.keys())
                         responses = memo[key]
                         self.logger.debug("Using cache response: %s", responses, exc_info=True)
                         self.logger.debug("Using key: %s", key, exc_info=True)
@@ -546,6 +549,8 @@ class Generate(Operation):
                 self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
                 if key in memo:
+                    self.logger.debug("CURRENT KEY: %s", key)
+                    self.logger.debug("ALL KEYS: %s", memo.keys())
                     responses = memo[key]
                     self.logger.debug("Using cache response: %s", responses, exc_info=True)
                     self.logger.debug("Using key: %s", key, exc_info=True)
