@@ -6,7 +6,13 @@
 #
 # main author: Nils Blach
 
+
+
 import os
+import sys
+
+sys.path.insert(0, "../../")
+
 import logging
 import datetime
 import json
@@ -119,7 +125,7 @@ Incorrectly Sorted: {incorrectly_sorted}
 """
 
     got_split_prompt = """<Instruction> Split the following list of 64 numbers into 16 lists of 4 numbers each, the first list should contain the first 4 numbers, the second list the second 4 numbers, the third list the third 4 numbers, the fourth list the fourth 4 numbers, the fifth list the fifth 4 numbers and so on.
-Only output the final 4 lists in the following format without any additional text or thoughts!:
+Only output the final 16 lists in the following format without any additional text or thoughts!:
 {{
     "List 1": [3, 4, 3, 5],
     "List 2": [2, 9, 2, 4],
@@ -194,8 +200,10 @@ Merged list:
         :raise AssertionError: If not exactly two thought states are provided.
         """
         if len(state_dicts)!=2:
+            print("breaking bad.")
             breakpoint()
         assert len(state_dicts) == 2, "Expected two states for aggregation prompt."
+        # breakpoint()
 
         len_input1 = len(utils.string_to_list(state_dicts[0]["current"]))
         len_input2 = len(utils.string_to_list(state_dicts[1]["current"]))

@@ -61,20 +61,20 @@ class ThoughtLite:
         self.phase = thought_state["phase"]
 
     def __eq__(self, other: ThoughtLite):
-        print("self ",  self)
-        print("other", other)
+        # print("self ",  self)
+        # print("other", other)
 
         rerturn_val = None
 
         if (self.current_data == None or self.current_data == "") and (other.current_data == None or other.current_data == ""):
             # return_val = self.phase == other.phase and self.original == other.original
-            print("Using current_data comparison")
+            # print("Using current_data comparison")
             return_val = self.original == other.original
         else:
             return_val = self.phase == other.phase and Counter(self.current_data) == Counter(other.current_data)
     
-        print("equal :", return_val)
-        print()
+        # print("equal :", return_val)
+        # print()
         return return_val
 
     def __hash__(self):
