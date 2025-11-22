@@ -7,9 +7,6 @@
 # main author: Nils Blach
 
 import os
-import sys
-
-sys.path.insert(0, "../../")
 import logging
 import datetime
 import json
@@ -121,31 +118,31 @@ Input: {input}
 Incorrectly Sorted: {incorrectly_sorted}
 """
 
-    got_split_prompt = """<Instruction> Split the following list of 32 numbers into 8 lists of 4 numbers each, the first list should contain the first 4 numbers, the second list the second 4 numbers, the third list the third 4 numbers, the fourth list the fourth 4 numbers, the fifth list the fifth 4 numbers and so on.
+    got_split_prompt = """<Instruction> Split the following list of 128 numbers into 8 lists of 16 numbers each, the first list should contain the first 16 numbers, the second list the second 16 numbers, the third list the third 16 numbers, the fourth list the fourth 16 numbers, the fifth list the fifth 16 numbers and so on.
 Only output the final 8 lists in the following format without any additional text or thoughts!:
 {{
-    "List 1": [3, 4, 3, 5],
-    "List 2": [2, 9, 2, 4],
-    "List 3": [6, 9, 8, 1],
-    "List 4": [9, 0, 7, 6],
-    "List 5": [7, 9, 4, 1],
-    "List 6": [1, 9, 0, 4],
-    "List 7": [2, 4, 3, 5],
-    "List 8": [4, 2, 1, 2]
+    "List 1": [3, 4, 3, 5, 7, 8, 1, ...],
+    "List 2": [2, 9, 2, 4, 7, 1, 5, ...],
+    "List 3": [6, 9, 8, 1, 9, 2, 4, ...],
+    "List 4": [9, 0, 7, 6, 5, 6, 6, ...],
+    "List 5": [7, 9, 4, 1, 1, 8, 1, ...],
+    "List 6": [1, 9, 0, 4, 3, 3, 5, ...],
+    "List 7": [2, 4, 3, 5, 8, 2, 2, ...],
+    "List 8": [4, 2, 1, 2, 7, 6, 8, ...]
 }} </Instruction>
 
 <Example>
-Input: [6, 0, 2, 3, 3, 1, 2, 6, 5, 3, 1, 2, 3, 8, 7, 3, 4, 0, 8, 6, 0, 8, 2, 6, 0, 9, 3, 9, 4, 9, 1, 4]
+Input: [6, 0, 2, 3, 8, 3, 0, 2, 4, 5, 4, 1, 3, 6, 9, 8, 3, 1, 2, 6, 5, 3, 9, 8, 9, 1, 6, 1, 0, 2, 8, 9, 5, 3, 1, 2, 7, 9, 4, 8, 8, 9, 3, 2, 8, 4, 7, 4, 3, 8, 7, 3, 6, 4, 0, 0, 6, 8, 1, 5, 8, 7, 5, 1, 4, 0, 8, 6, 1, 3, 6, 1, 7, 6, 8, 7, 3, 7, 8, 2, 0, 8, 2, 6, 0, 0, 9, 9, 8, 6, 9, 4, 8, 5, 5, 0, 0, 9, 3, 9, 4, 0, 5, 6, 2, 4, 6, 7, 7, 7, 8, 0, 4, 9, 1, 4, 8, 5, 1, 4, 4, 7, 4, 9, 3, 9, 6, 7]
 Output: 
 {{
-    "List 1": [6, 0, 2, 3],
-    "List 2": [3, 1, 2, 6],
-    "List 3": [5, 3, 1, 2],
-    "List 4": [3, 8, 7, 3],
-    "List 5": [4, 0, 8, 6],
-    "List 6": [0, 8, 2, 6],
-    "List 7": [0, 9, 3, 9],
-    "List 8": [4, 9, 1, 4]
+    "List 1": [6, 0, 2, 3, 8, 3, 0, 2, 4, 5, 4, 1, 3, 6, 9, 8],
+    "List 2": [3, 1, 2, 6, 5, 3, 9, 8, 9, 1, 6, 1, 0, 2, 8, 9],
+    "List 3": [5, 3, 1, 2, 7, 9, 4, 8, 8, 9, 3, 2, 8, 4, 7, 4],
+    "List 4": [3, 8, 7, 3, 6, 4, 0, 0, 6, 8, 1, 5, 8, 7, 5, 1],
+    "List 5": [4, 0, 8, 6, 1, 3, 6, 1, 7, 6, 8, 7, 3, 7, 8, 2],
+    "List 6": [0, 8, 2, 6, 0, 0, 9, 9, 8, 6, 9, 4, 8, 5, 5, 0],
+    "List 7": [0, 9, 3, 9, 4, 0, 5, 6, 2, 4, 6, 7, 7, 7, 8, 0],
+    "List 8": [4, 9, 1, 4, 8, 5, 1, 4, 4, 7, 4, 9, 3, 9, 6, 7]
 }}
 </Example>
 
@@ -185,14 +182,12 @@ Merged list:
         len_input2 = len(utils.string_to_list(state_dicts[1]["current"]))
         if len_input1 == len_input2:
             length = len_input1
-        elif len_input1 + len_input2 - 8 <= 4:
-            length = 4
-        elif len_input1 + len_input2 - 16 <= 8:
-            length = 8
         elif len_input1 + len_input2 - 32 <= 16:
             length = 16
-        else:
+        elif len_input1 + len_input2 - 64 <= 32:
             length = 32
+        else:
+            length = 64
 
         return self.got_merge_prompt.format(
             input1=state_dicts[0]["current"],
@@ -207,26 +202,21 @@ Merged list:
         """
         Generate a generate prompt for the language model.
 
-        :param              num_branches: The number of responses the prompt should ask the LM to generate.
-        :type               num_branches: int
-        
-        :param              original: Input list of numbers.
-        :type               original: str
-        
-        :param              current: Intermediate solution.
-        :type               current: str
-        
-        :param              method: Method for which the generate prompt is generated.
-        :type               method: str
-        
-        :param              kwargs: Additional keyword arguments.
-        
+        :param num_branches: The number of responses the prompt should ask the LM to generate.
+        :type num_branches: int
+        :param original: Input list of numbers.
+        :type original: str
+        :param current: Intermediate solution.
+        :type current: str
+        :param method: Method for which the generate prompt is generated.
+        :type method: str
+        :param kwargs: Additional keyword arguments.
         :return: The generate prompt.
         :rtype: str
-        
         :raise AssertionError: If the requested number of branches is not one.
         """
 
+        assert num_branches == 1, "Branching should be done via multiple requests."
         if current is None or current == "":
             input = original
         else:
@@ -390,9 +380,9 @@ class SortingParser(parser.Parser):
                 try:
                     text = text[text.index("{") : text.index("}") + 1]
                     json_dict = json.loads(text)
-                    if len(json_dict.keys()) != 2:
+                    if len(json_dict.keys()) != 4:
                         logging.warning(
-                            f"Expected 2 lists in json, but found {len(json_dict.keys())}."
+                            f"Expected 4 lists in json, but found {len(json_dict.keys())}."
                         )
                     for key, value in json_dict.items():
                         if "List" not in key:
@@ -533,7 +523,7 @@ def tot() -> operations.GraphOfOperations:
     keep_best_1 = operations.KeepBestN(1, False)
     operations_graph.append_operation(keep_best_1)
 
-    for _ in range(1):
+    for _ in range(3):
         operations_graph.append_operation(operations.Generate(1, 20))
         operations_graph.append_operation(operations.Score(1, False, utils.num_errors))
         keep_best_2 = operations.KeepBestN(1, False)
@@ -562,7 +552,7 @@ def tot2() -> operations.GraphOfOperations:
     keep_best_1 = operations.KeepBestN(1, False)
     operations_graph.append_operation(keep_best_1)
 
-    for _ in range(2):
+    for _ in range(9):
         operations_graph.append_operation(operations.Generate(1, 10))
         operations_graph.append_operation(operations.Score(1, False, utils.num_errors))
         keep_best_2 = operations.KeepBestN(1, False)
@@ -570,7 +560,11 @@ def tot2() -> operations.GraphOfOperations:
         operations_graph.append_operation(keep_best_2)
         keep_best_1 = keep_best_2
 
+        operations_graph.append_operation(operations.KeepBestN(1, False))
+        operations_graph.append_operation(operations.KeepBestN(1, False))
+
     operations_graph.append_operation(operations.KeepBestN(1, False))
+
     operations_graph.append_operation(operations.GroundTruth(utils.test_sorting))
 
     return operations_graph
@@ -783,7 +777,7 @@ def run(
     """
 
     orig_budget = budget
-    data_path = os.path.join(os.path.dirname(__file__), "sorting_032_4_digit.csv")
+    data_path = os.path.join(os.path.dirname(__file__), "sorting_128.csv")
     data = []
     with open(data_path, "r") as f:
         reader = csv.reader(f)
@@ -795,7 +789,7 @@ def run(
         data_ids = list(range(len(data)))
     selected_data = [data[i] for i in data_ids]
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results/memoized/sorting_032")
+    results_dir = os.path.join(os.path.dirname(__file__), "results/default/sorting_128")
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -848,7 +842,7 @@ def run(
                     f"Budget has been depleted, stopping. Method {method.__name__} has not been run."
                 )
                 break
-            lm = model_mapping[lm_name](
+            lm = language_models.ChatGPT(
                 os.path.join(
                     os.path.dirname(__file__),
                     "../../graph_of_thoughts/language_models/config_template.json",
@@ -886,8 +880,8 @@ def run(
 
 if __name__ == "__main__":
     """
-    Input (x)   : an unordered list of 32 numbers between 0 and 9 (inclusive)
-    Output (y)  : a sorted list of 32 numbers between 0 and 9 (inclusive)
+    Input (x)   : an unordered list of 128 numbers between 0 and 9 (inclusive)
+    Output (y)  : a sorted list of 128 numbers between 0 and 9 (inclusive)
     Correct     : y == sorted(x)
     Input Example:
         [0, 1, 9, 4, 2, 2, 0, 5, 1...]
@@ -896,8 +890,7 @@ if __name__ == "__main__":
     """
     budget = 30
     # samples = [item for item in range(0, 100)]
-    samples = [1]
-    # approaches = [io, cot, tot, tot2, got]
+    samples = [0]
     approaches = [got]
 
     spent = run(samples, approaches, budget, "gpt-4.1-mini")
