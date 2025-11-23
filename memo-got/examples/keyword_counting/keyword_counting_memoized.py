@@ -12,6 +12,7 @@
 
 import os
 import sys
+
 sys.path.insert(0, "../../")
 
 import logging
@@ -742,6 +743,7 @@ Output:
         :rtype: str
         :raise AssertionError: If more than two thought states are provided.
         """
+        # breakpoint()
         assert len(state_dicts) <= 2, "Expected 2 states for aggregation prompt."
         if len(state_dicts) == 0:
             state_dicts = [{"current": "{}"}, {"current": "{}"}]
@@ -1326,6 +1328,7 @@ def run(
     methods: List[Callable[[], operations.GraphOfOperations]],
     budget: float,
     lm_name: str,
+    task: str,
 ) -> float:
     """
     Controller function that executes each specified method for each specified
@@ -1360,7 +1363,7 @@ def run(
         data_ids = list(range(len(data)))
     selected_data = [data[i] for i in data_ids]
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results/default")
+    results_dir = os.path.join(os.path.dirname(__file__), "results/memo")
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -1426,6 +1429,7 @@ def run(
                     "phase": 0,
                     "method": method.__name__,
                 },
+                task = task,
             )
             try:
                 executor.run()
@@ -1454,9 +1458,9 @@ if __name__ == "__main__":
     """
     budget = 30
     # samples = [item for item in range(0, 100)]
-    samples = [0,1]
+    samples = [0]
     approaches = [gotx]
 
-    spent = run(samples, approaches, budget, "gpt-4.1-mini")
+    spent = run(samples, approaches, budget, "gpt-4.1-mini", task="counting")
 
     logging.info(f"Spent {spent} out of {budget} budget.")

@@ -22,6 +22,14 @@ from graph_of_thoughts.prompter import Prompter
 from graph_of_thoughts.parser import Parser
 from graph_of_thoughts.call_count import increment_counter
 
+class UndefinedTaskException(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+    def __str__(self):
+        return f'UndefinedTaskException: {self.message}'
+
 class OperationType(Enum):
     """
     Enum to represent different operation types that can be used as unique identifiers.
@@ -42,36 +50,84 @@ class ThoughtLite:
     current_data : str = ""
     original : str = ""
     phase :int = -1
+    task :str = ""
+    ground_truth: str = ""
+    sub_text: str = ""
+    part: str = ""
 
     def __str__(self):
-        return f"current_data : {self.current_data} , original : {self.original} , phase: {self.phase}"
+        return f"""
+original :      {self.original} ,
+current_data :  {self.current_data} ,
+sub_text:       {self.sub_text},
+ground_truth:   {self.ground_truth},
+phase:          {self.phase},
+part:           {self.part},
+"""
 
     def __repr__(self):
-        return f"ThoughtLite [ current_data : {self.current_data} , original : {self.original} , phase: {self.phase} ]"
+        return f"""
+original :      {self.original} ,
+current_data :  {self.current_data} ,
+sub_text:       {self.sub_text},
+ground_truth:   {self.ground_truth},
+phase:          {self.phase},
+part:           {self.part},
+"""
 
 
-    def __init__(self, thought_state: Dict):
+    def __init__(self, task:str, thought_state: Dict):
         # print(thought_state["current"], type(thought_state["current"]))
         # print(thought_state["original"], type(thought_state["original"]))
+        self.task = task
         self.current_data = thought_state["current"]
         if self.current_data!=None and self.current_data!="":
-            self.current_data = tuple(ast.literal_eval(thought_state["current"]))
+            if task=="sorting":
+                self.current_data = tuple(ast.literal_eval(thought_state["current"]))
+            
+            elif task=="counting":
+                self.current_data = thought_state["current"]
+                if "sub_text" in thought_state:
+                    self.sub_text = thought_state["sub_text"]
+                else:
+                    self.sub_text = ""
+            
+            else:
+                raise UndefinedTaskException(self.task)
 
-        self.original = tuple(ast.literal_eval(thought_state["original"]))
+        if task=="sorting":
+            self.original = tuple(ast.literal_eval(thought_state["original"]))
+        
+        elif task=="counting":
+            self.original = thought_state["original"]
+            if "sub_text" in thought_state:
+                self.sub_text = thought_state["sub_text"]
+            else:
+                self.sub_text = ""
+        
+        else:
+            raise UndefinedTaskException(self.task)
         self.phase = thought_state["phase"]
 
     def __eq__(self, other: ThoughtLite):
-        # print("self ",  self)
-        # print("other", other)
-
-        rerturn_val = None
+        return_val = None
 
         if (self.current_data == None or self.current_data == "") and (other.current_data == None or other.current_data == ""):
             # return_val = self.phase == other.phase and self.original == other.original
             # print("Using current_data comparison")
-            return_val = self.original == other.original
+            if self.task=="sorting":
+                return_val = self.original == other.original
+            elif self.task=="counting":
+                return_val = self.original == other.original and self.phase == other.phase and self.sub_text==other.sub_text
+            else:
+                raise UndefinedTaskException(self.task)
         else:
-            return_val = self.phase == other.phase and Counter(self.current_data) == Counter(other.current_data)
+            if self.task=="sorting":
+                return_val = self.phase == other.phase and Counter(self.current_data) == Counter(other.current_data)
+            elif self.task=="counting":
+                return_val = self.phase == other.phase and self.current_data == other.current_data and self.sub_text==other.sub_text
+            else:
+                raise UndefinedTaskException(self.task)
     
         # print("equal :", return_val)
         # print()
@@ -160,7 +216,7 @@ class Operation(ABC):
 
     def execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Execute the operation, assuring that all predecessors have been executed.
@@ -178,13 +234,14 @@ class Operation(ABC):
         self.logger.info(
             "Executing operation %d of type %s", self.id, self.operation_type
         )
-        self._execute(lm, prompter, parser, memo, **kwargs)
+        self._execute(lm, prompter, parser, memo, task, **kwargs)
         self.logger.debug("Operation %d executed", self.id, exc_info=True)
         self.executed = True
 
     @abstractmethod
     def _execute(
-        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, memo: Dict, **kwargs
+        self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Abstract method for the actual execution of the operation.
@@ -259,7 +316,7 @@ class Score(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the scoring operation by scoring the thoughts from the predecessors.
@@ -376,7 +433,7 @@ class ValidateAndImprove(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task: str, **kwargs
     ) -> None:
         """
         Executes the ValidateAndImprove operation by validating and improving the predecessors' thoughts.
@@ -412,7 +469,7 @@ class ValidateAndImprove(Operation):
                     valid = self.validate_function(current_thought.state)
                 else:
                     prompt = prompter.validation_prompt(**current_thought.state)
-                    key = (self.operation_type, prompter.validation_prompt, ThoughtLite(current_thought.state))
+                    key = (self.operation_type, prompter.validation_prompt, ThoughtLite(task, current_thought.state))
                     self.logger.debug("Created key: %s", key, exc_info=True)
                     self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
@@ -504,7 +561,7 @@ class Generate(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
 
        
@@ -543,8 +600,7 @@ class Generate(Operation):
             try:
                 base_state = thought.state
                 prompt = prompter.generate_prompt(self.num_branches_prompt, **base_state)
-                
-                key = (self.operation_type, prompter.generate_prompt, ThoughtLite(thought.state))
+                key = (self.operation_type, prompter.generate_prompt, ThoughtLite(task, thought.state))
                 self.logger.debug("Created key: %s", key, exc_info=True)
                 self.logger.debug("Prompt for LM: %s", prompt, exc_info=True)
 
@@ -619,7 +675,7 @@ class Improve(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the Improve operation by improving the predecessors' thoughts.
@@ -641,7 +697,7 @@ class Improve(Operation):
         for thought in previous_thoughts:
             improve_prompt = prompter.improve_prompt(**thought.state)
             
-            key = (self.operation_type, prompter.improve_prompt, ThoughtLite(thought.state))
+            key = (self.operation_type, prompter.improve_prompt, ThoughtLite(task, thought.state))
             self.logger.debug("Created key: %s", key)
             self.logger.debug("Prompt for LM: %s", improve_prompt)
 
@@ -694,7 +750,7 @@ class Aggregate(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the Aggregate operation by aggregating the predecessors' thoughts.
@@ -733,15 +789,50 @@ class Aggregate(Operation):
 
             first_state = previous_thought_states[0]
             second_state = previous_thought_states[1]
+            # breakpoint()
             combined_state: Dict = dict()
 
-            if first_state["phase"] == second_state["phase"] and first_state["original"] == second_state["original"]:
+            # self.logger.debug("FIRST STATE: %s", first_state)
+            # self.logger.debug("SECOND STATE: %s", second_state)
+
+            if len(second_state)==1:
+                previous_thought_states.pop()
+                prompt = prompter.aggregation_prompt(previous_thought_states)
+
+                self.logger.debug("States can't be combined, using normal prompting approach")
+                self.logger.debug("Prompt for LM: %s", prompt)
+
+                responses = lm.get_response_texts(
+                    lm.query(prompt, num_responses=self.num_responses)
+                )   
+                increment_counter()
+                self.logger.debug("Responses from LM: %s", responses)
+
+
+                parsed = parser.parse_aggregation_answer(previous_thought_states, responses)
+
+                if isinstance(parsed, dict):
+                    parsed = [parsed]
+                for new_state in parsed:
+                    self.thoughts.append(Thought({**base_state, **new_state}))
+
+                return
+            
+            elif first_state["phase"] == second_state["phase"] and first_state["original"] == second_state["original"]:
                 combined_state["phase"] = first_state["phase"]
                 combined_state["original"] = first_state["original"]
-                list1 = ast.literal_eval(first_state["current"])
-                list2 = ast.literal_eval(second_state["current"])
-                combined_list = list1 + list2
-                combined_state["current"] = str(combined_list)
+                if task=="sorting":
+                    list1 = ast.literal_eval(first_state["current"])
+                    list2 = ast.literal_eval(second_state["current"])
+                    combined_list = list1 + list2
+                    combined_state["current"] = str(combined_list)
+                elif task=="counting":
+                    dict_1 = ast.literal_eval(first_state["current"])
+                    dict_2 = ast.literal_eval(second_state["current"])
+                    combined_dict = dict(Counter(dict_1) + Counter(dict_2))
+                    combined_state["current"] = str(combined_dict)
+                else:
+                    raise UndefinedTaskException(task)
 
             if len(combined_state) != 0:
                 # Create a combined ThoughtLite instance corresponding to combined_state.
@@ -750,7 +841,7 @@ class Aggregate(Operation):
                 # else
                 #    call LLM and cache its response    
                 self.logger.debug("States can be combined, trying optimized approach")
-                key = (self.operation_type, "aggregate", ThoughtLite(combined_state))
+                key = (self.operation_type, prompter.aggregation_prompt, ThoughtLite(task, combined_state))
                 if key in memo:
                     self.logger.debug("CURRENT KEY: %s", key)
                     self.logger.debug("ALL KEYS: %s", memo.keys())
@@ -866,7 +957,7 @@ class KeepBestN(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the KeepBestN operation by keeping the best N thoughts from the predecessors according to their score.
@@ -923,7 +1014,7 @@ class KeepValid(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the KeepValid operation by keeping the valid thoughts from the predecessors.
@@ -992,7 +1083,7 @@ class GroundTruth(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the GroundTruth operation by evaluating the predecessors' thoughts using the ground truth evaluator function.
@@ -1058,7 +1149,7 @@ class Selector(Operation):
 
     def _execute(
         self, lm: AbstractLanguageModel, prompter: Prompter, parser: Parser, 
-        memo: Dict, **kwargs
+        memo: Dict, task:str, **kwargs
     ) -> None:
         """
         Executes the Selector operation by selecting thoughts from the predecessors using the selector function.

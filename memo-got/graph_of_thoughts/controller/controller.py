@@ -29,6 +29,7 @@ class Controller:
         prompter: Prompter,
         parser: Parser,
         problem_parameters: dict,
+        task: str,
     ) -> None:
         """
         Initialize the Controller instance with the language model,
@@ -52,6 +53,7 @@ class Controller:
         self.parser = parser
         self.problem_parameters = problem_parameters
         self.run_executed = False
+        self.task = task
 
     def run(self) -> None:
         """
@@ -74,11 +76,11 @@ class Controller:
         memo = dict()
 
         while len(execution_queue) > 0:
-            # breakpoint()
             current_operation = execution_queue.pop(0)
+            # breakpoint()
             self.logger.info("Executing operation %s", current_operation.operation_type)
             current_operation.execute(
-                self.lm, self.prompter, self.parser, memo, **self.problem_parameters
+                self.lm, self.prompter, self.parser, memo, self.task, **self.problem_parameters
             )
             self.logger.info("Operation %s executed", current_operation.operation_type)
             for operation in current_operation.successors:
