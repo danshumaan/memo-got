@@ -765,6 +765,7 @@ def run(
     methods: List[Callable[[], operations.GraphOfOperations]],
     budget: float,
     lm_name: str,
+    task: str,
 ) -> float:
     """
     Controller function that executes each specified method for each specified
@@ -868,6 +869,7 @@ def run(
                     "phase": 0,
                     "method": method.__name__,
                 },
+                task = task,
             )
             try:
                 executor.run()
@@ -896,10 +898,10 @@ if __name__ == "__main__":
     """
     budget = 30
     # samples = [item for item in range(0, 100)]
-    samples = [1]
+    samples = [0]
     # approaches = [io, cot, tot, tot2, got]
     approaches = [got]
 
-    spent = run(samples, approaches, budget, "gpt-4.1-mini")
+    spent = run(samples, approaches, budget, "gpt-4.1-mini", "sorting")
 
     logging.info(f"Spent {spent} out of {budget} budget.")
